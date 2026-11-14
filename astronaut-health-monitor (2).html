@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Astronaut Health Monitor</title>
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#050a14;--panel:#0a1424cc;--line:#1b3050;--tx:#d6e6ff;--dim:#7f96b8;--ok:#33f0a0;--warn:#ffc233;--bad:#ff3b4e;--art:#ff4256;--vein:#3b8cff;--cy:#38d9ff}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Trebuchet MS","Segoe UI",system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+#stars{position:fixed;inset:0;z-index:0;width:100%;height:100%}
+body::after{content:"";position:fixed;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,#0000 0 3px,#00000030 3px 4px);animation:scan 8s linear infinite}
+@keyframes scan{to{background-position:0 80px}}
+#alertfx{position:fixed;inset:0;z-index:4;pointer-events:none;box-shadow:inset 0 0 0 transparent;transition:box-shadow .4s}
+body.crit #alertfx{animation:flash .9s infinite}
+@keyframes flash{50%{box-shadow:inset 0 0 120px #ff3b4e99}}
+main{position:relative;z-index:2;max-width:1400px;margin:auto;padding:14px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+h1{margin:0;font:700 22px/1.1 "Palatino Linotype",Georgia,serif;letter-spacing:.5px}
+h1 small{display:block;font:12px "Trebuchet MS",sans-serif;color:var(--dim);letter-spacing:0}
+.badge{padding:6px 16px;border-radius:30px;font-weight:700;border:1px solid;transition:.3s}
+.s0{color:var(--ok);border-color:var(--ok);background:#33f0a014}.s1{color:var(--warn);border-color:var(--warn);background:#ffc23318}.s2{color:var(--bad);border-color:var(--bad);background:#ff3b4e22}
+.clock{font:600 18px "Courier New",monospace;color:var(--cy);text-shadow:0 0 10px var(--cy)}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr) minmax(0,1fr);gap:12px}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;backdrop-filter:blur(6px)}
+.panel h2{margin:0 0 8px;font-size:14px;color:var(--cy)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.card{border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:8px;padding:8px;background:#0b1830;transition:.3s}
+.card.s1{border-left-color:var(--warn)}.card.s2{border-left-color:var(--bad);animation:pulse .8s infinite}
+@keyframes pulse{50%{box-shadow:0 0 18px #ff3b4e88}}
+.card b{display:block;font-size:12px;color:var(--dim);font-weight:400}
+.card .v{font:700 24px "Courier New",monospace}.card u{text-decoration:none;font-size:11px;color:var(--dim)}
+.card .st{font-size:11px;font-weight:700}
+canvas.view{width:100%;display:block;border-radius:8px;background:radial-gradient(#0e2240,#050a14)}
+#log{height:170px;overflow:auto;font:12px "Courier New",monospace}
+#log div{padding:2px 0;border-bottom:1px dashed #1b305055}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+button,select{background:#10233f;color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--cy)}button:focus-visible,select:focus-visible{outline:2px solid var(--cy)}
+button.on{background:#0d4a5e;border-color:var(--cy)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 8px}
+#tabbody{min-height:200px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}th{color:var(--cy)}
+.tl{display:grid;gap:6px}
+.ev{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:6px 8px;border-radius:6px;border-left:4px solid var(--line);background:#0b1830}
+.ev.eat{border-color:var(--ok)}.ev.ex{border-color:var(--vein)}.ev.sl{border-color:#9b7bff}.ev.no{border-color:var(--bad)}.ev.now{outline:2px solid var(--cy);box-shadow:0 0 14px #38d9ff66}
+.ev time{font:600 13px "Courier New",monospace}
+.banner{padding:10px;border-radius:8px;margin-bottom:8px;font-weight:700}
+ul{margin:4px 0;padding-left:18px}
+@media(prefers-reduced-motion:reduce){body::after,.card.s2,body.crit #alertfx{animation:none}}
+</style></head><body>
+<canvas id="stars"></canvas><div id="alertfx"></div>
+<main>
+<header>
+<h1>Astronaut Health Monitor<small>Crew member A-01 · Orbital station · Live telemetry (simulated)</small></h1>
+<div class="clock" id="met">MET 000d 00:00:00</div>
+<div class="badge s0" id="overall">ALL SYSTEMS NOMINAL</div>
+</header>
+<div class="ctl" id="crew" style="margin:0 0 12px"></div>
+<div class="grid">
+<section class="panel"><h2>Vital signs</h2><div class="cards" id="cards"></div>
+<div class="ctl" id="faults"></div>
+<div id="organguide" style="margin-top:10px;font-size:12px;border-top:1px solid var(--line);padding-top:8px"></div></section>
+<section class="panel"><h2>Cardiovascular scan</h2><div style="display:flex;gap:8px"><div class="ctl" id="organs" style="flex-direction:column;margin:0;flex:none"><button data-o="body">Body</button><button data-o="lungs">Lungs</button><button data-o="heart">Heart</button><button data-o="hand">Hand</button></div><canvas class="view" id="body" width="400" height="560" style="flex:1;min-width:0"></canvas></div><div id="organinfo" style="margin-top:8px;font-size:12px;color:var(--dim)"></div></section>
+<section>
+<div class="panel"><h2>ECG · lead II</h2><canvas class="view" id="ecg" width="500" height="150"></canvas></div>
+<div class="panel" style="margin-top:12px"><h2>Event log</h2><div id="log"></div>
+<div class="ctl"><button id="chaos">Auto-faults: OFF</button><button id="clear">Clear faults</button><select id="speed" aria-label="Time speed"><option value="60">Clock ×60</option><option value="240" selected>Clock ×240</option><option value="900">Clock ×900</option></select></div></div>
+</section></div>
+<div class="tabs" id="tabs"></div>
+<div class="panel" id="tabbody"></div>
+</main>
+<script>
+// ---------- vitals model ----------
+const CREW=[{n:'Dr. Daradhy',role:'Flight Surgeon',p:{}},{n:'Dr. Rohit',role:'Mission Specialist',p:{hr:-5,spo2:.5,bone:1.5,rad:-3}},{n:'Dr. Virat',role:'Commander',p:{hr:3,sys:4,dia:2,rad:4,bone:-1}}];
+CREW.forEach((c,i)=>c.st={water:0,ex:0,mood:8,sleep:7.5,dose:118+i*9,pvt:[]});
+let ci=0,ST=CREW[0].st,organ='body',bph=0;const H={};
+const VM={hr:'cardiac',sys:'cardiac',dia:'cardiac',spo2:'hypoxia',temp:'fever',hyd:'dehyd',rad:'rad',co2:'co2',rr:'co2',bone:'bone'};
+const COND={
+cardiac:{n:'Heart problem',eat:'Nothing heavy. Small sips of water. Later: bananas, leafy greens, oats, fish (omega-3).',med:'Call the flight surgeon first. Aspirin or heart drugs only if the doctor says so.',no:'Caffeine, salty snacks, hard exercise.'},
+hypoxia:{n:'Low oxygen',eat:'Fix the air first. Later eat iron foods (beef, beans, spinach) and vitamin C.',med:'Oxygen from the mask or tank. No pills fix this.',no:'Hard exercise, smoke or fire fumes.'},
+fever:{n:'Fever',eat:'2–3 L water or electrolyte drink, light food, fruit, soup-style meals.',med:'Paracetamol (acetaminophen) is the usual first choice. Ibuprofen is another option. Doctor sets the dose.',no:'Heavy or spicy food, caffeine, exercise until it passes.'},
+dehyd:{n:'Dehydration',eat:'Oral rehydration drink, small sips often, salty broth, melon or orange.',med:'Oral rehydration salts. IV fluids from the kit if severe.',no:'Coffee, energy drinks, salty chips.'},
+rad:{n:'Solar flare (radiation)',eat:'Fruit, nuts and veg with vitamin C and E. They help a little, shelter helps most.',med:'Anti-nausea medicine if sick. Doctor monitors blood counts.',no:'Staying in a thin-walled module.'},
+co2:{n:'High CO₂ / breathing',eat:'Water. Light snack only after the air is clean.',med:'No pill. Switch the scrubber. Paracetamol if headache.',no:'Hard exercise, staying near the face of stale air.'},
+bone:{n:'Bone loss',eat:'Milk-type foods, fish, eggs, greens. Calcium and vitamin D.',med:'Vitamin D supplement. Bone drugs (bisphosphonates) only in trials.',no:'Too much salt, skipping exercise.'},
+nausea:{n:'Space sickness (first days)',eat:'Small dry bites, ginger, plain water. Eat slowly.',med:'Anti-nausea medicine such as promethazine, prescribed.',no:'Fast head movements, fatty food.'}};
+const ORG={
+body:{n:'Whole body',j:'All organs work together. Heart pumps, lungs bring oxygen, nerves send messages.',m:'Red arteries carry oxygen out, blue veins bring blood back, yellow nerves carry signals.',e:'Balanced meals, 2–3 L fluid, calcium, vitamin D.',a:'Fizzy drinks, crumbly food, heavy meals before sleep.'},
+lungs:{n:'Lungs',j:'Put oxygen into blood and remove CO₂.',m:'Air goes down the trachea into bronchi, then tiny air sacs (alveoli). Oxygen jumps into blood, CO₂ jumps out. Blue blood comes in, red blood leaves.',e:'Vitamin C and E fruit, iron foods, plenty of water.',a:'Smoke, dust, high-CO₂ air.'},
+heart:{n:'Heart',j:'Pumps blood round the body.',m:'Right side (RA, RV) sends blue blood to the lungs. Left side (LA, LV) sends red blood out through the aorta. Valves stop backflow. Coronary arteries feed the heart.',e:'Fish, oats, nuts, fruit, leafy greens.',a:'Too much salt, caffeine late in the day.'},
+hand:{n:'Hand and pulse',j:'Touch, grip and tools. The wrist shows your pulse.',m:'The radial artery brings red blood to the hand. You can feel each heartbeat there. Yellow nerves send touch signals.',e:'Protein, vitamin C (healing), omega-3.',a:'Tight gloves for a long time, skipping hand exercises.'}};
+let gC='';
+function guide(){const o=ORG[organ],ks=[...new Set(V.filter(x=>x.st&&VM[x.id]).map(x=>VM[x.id]))];
+const h=`<b style="color:var(--cy)">${o.n}: functions and food</b><br><b>Job:</b> ${o.j}<br><b>How it works:</b> ${o.m}<br><b style="color:var(--ok)">Eat:</b> ${o.e}<br><b style="color:var(--bad)">Avoid:</b> ${o.a}<br><span style="color:#ff6a7a">● red = arteries</span> <span style="color:#4aa0ff">● blue = veins</span> <span style="color:#ffd23f">● yellow = nerves</span>`+(ks.length?`<div class="banner s1" style="margin-top:8px">Right now: ${ks.map(k=>`<b>${COND[k].n}</b><br>Eat: ${COND[k].eat}<br>Medicine: ${COND[k].med}`).join('<br>')}</div>`:'');
+if(h!==gC){gC=h;$('organguide').innerHTML=h}}
+const V=[
+{id:'hr',n:'Heart rate',u:'bpm',b:72,r:5,d:0,w:[50,100],c:[40,130]},
+{id:'spo2',n:'Blood oxygen',u:'%',b:98,r:.5,d:1,w:[94,101],c:[90,101],max:100},
+{id:'sys',n:'BP systolic',u:'mmHg',b:118,r:4,d:0,w:[90,135],c:[80,160]},
+{id:'dia',n:'BP diastolic',u:'mmHg',b:76,r:3,d:0,w:[55,88],c:[45,100]},
+{id:'temp',n:'Body temp',u:'°C',b:36.8,r:.1,d:1,w:[36,37.8],c:[35,39]},
+{id:'rr',n:'Breathing',u:'/min',b:15,r:1,d:0,w:[10,20],c:[8,28]},
+{id:'hyd',n:'Hydration',u:'%',b:82,r:1.5,d:0,w:[65,101],c:[50,101],max:100},
+{id:'co2',n:'Cabin CO₂',u:'mmHg',b:2.8,r:.15,d:1,w:[0,4.5],c:[0,6]},
+{id:'rad',n:'Radiation',u:'µSv/h',b:22,r:3,d:0,w:[0,40],c:[0,80]},
+{id:'bone',n:'Bone density',u:'% base',b:96.5,r:.15,d:1,w:[94,200],c:[90,200]}
+];
+V.forEach(x=>{x.v=x.b;x.b0=x.b;x.off=0;x.st=0});
+const FAULTS={cardiac:{l:'Cardiac event',o:{hr:75,sys:42,spo2:-4}},hypoxia:{l:'Hypoxia',o:{spo2:-10,rr:13,hr:25}},fever:{l:'Fever',o:{temp:2.4,hr:28,hyd:-20}},dehyd:{l:'Dehydration',o:{hyd:-38,sys:-28,hr:20}},rad:{l:'Solar flare',o:{rad:75}},co2:{l:'CO₂ scrubber fail',o:{co2:3.6,rr:9,hr:15}}};
+let faultT=0,active=null;
+const $=id=>document.getElementById(id);
+$('cards').innerHTML=V.map(x=>`<div class="card" id="c_${x.id}"><b>${x.n}</b><span class="v" id="v_${x.id}">--</span> <u>${x.u}</u><div class="st" id="s_${x.id}"></div></div>`).join('');
+$('faults').innerHTML='<span style="color:var(--dim);font-size:12px;width:100%">Inject a test fault:</span>'+Object.keys(FAULTS).map(k=>`<button data-f="${k}">${FAULTS[k].l}</button>`).join('');
+$('faults').onclick=e=>{const k=e.target.dataset.f;if(k)inject(k)};
+function inject(k){clear();active=k;faultT=60;for(const id in FAULTS[k].o)V.find(x=>x.id==id).off=FAULTS[k].o[id];log(`TEST FAULT injected: ${FAULTS[k].l}`,1)}
+function clear(){V.forEach(x=>x.off=0);active=null;faultT=0}
+$('clear').onclick=()=>{clear();log('Faults cleared, vitals recovering',0)};
+let chaos=false;$('chaos').onclick=()=>{chaos=!chaos;$('chaos').textContent='Auto-faults: '+(chaos?'ON':'OFF');$('chaos').className=chaos?'on':''};
+const NAMES=['NOMINAL','WARNING','CRITICAL'],CLS=['s0','s1','s2'];
+let mt=0;
+function met(){const s=Math.floor(simSec),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),sc=s%60,p=n=>String(n).padStart(2,'0');return `${p(d)}d ${p(h)}:${p(m)}:${p(sc)}`}
+function log(t,l){const e=document.createElement('div');e.style.color=['var(--ok)','var(--warn)','var(--bad)'][l];e.textContent=`[${met()}] ${t}`;$('log').prepend(e)}
+function tick(){
+ let worst=0;
+ if(chaos&&!active&&Math.random()<.04)inject(Object.keys(FAULTS)[Math.floor(Math.random()*6)]);
+ if(active&&--faultT<=0){clear();log('Fault ended, crew recovering',0)}
+ V.forEach(x=>{
+  x.v+=(x.b+x.off-x.v)*.12+(Math.random()-.5)*x.r;
+  if(x.max)x.v=Math.min(x.v,x.max);
+  const s=(x.v<x.c[0]||x.v>x.c[1])?2:(x.v<x.w[0]||x.v>x.w[1])?1:0;
+  if(s!==x.st){log(`${x.n} ${NAMES[s]} (${x.v.toFixed(x.d)} ${x.u})`,s);x.st=s}
+  worst=Math.max(worst,s);
+  $('v_'+x.id).textContent=x.v.toFixed(x.d);
+  $('c_'+x.id).className='card '+CLS[s];$('s_'+x.id).textContent=NAMES[s];$('s_'+x.id).style.color=['var(--ok)','var(--warn)','var(--bad)'][s];
+ });
+ const o=$('overall');o.className='badge '+CLS[worst];o.textContent=['ALL SYSTEMS NOMINAL','CAUTION: CHECK CREW','CRITICAL: MEDICAL ALERT'][worst];
+ document.body.classList.toggle('crit',worst==2);
+ ST.dose+=V[8].v*.5*(+$('speed').value)/3600/1000;V.forEach(x=>{const a=H[x.id]=H[x.id]||[];a.push(x.v);if(a.length>120)a.shift()});oinfo();
+}
+setInterval(tick,500);tick();
+// ---------- clock ----------
+let simSec=6*3600,last=performance.now();
+function clockLoop(now){const sp=+$('speed').value;simSec+=(now-last)/1000*sp;last=now;$('met').textContent='MET '+met();renderLive();requestAnimationFrame(clockLoop)}
+// ---------- stars ----------
+const sc=$('stars'),sx=sc.getContext('2d');let S=[];
+function rs(){sc.width=innerWidth;sc.height=innerHeight;S=Array.from({length:160},()=>({x:Math.random()*sc.width,y:Math.random()*sc.height,z:Math.random()*2+.3}))}
+rs();addEventListener('resize',rs);
+function stars(){sx.clearRect(0,0,sc.width,sc.height);S.forEach(s=>{s.x-=s.z*.25;if(s.x<0)s.x=sc.width;sx.fillStyle=`rgba(180,215,255,${.25+s.z*.3})`;sx.fillRect(s.x,s.y,s.z,s.z)})}
+// ---------- heart, veins, particles ----------
+const bc=$('body'),b=bc.getContext('2d');
+const PATHS=[[[205,175],[205,130],[200,95],[200,62]],[[215,180],[250,172],[285,222],[300,290],[312,352]],[[185,180],[150,172],[115,222],[100,290],[88,352]],[[205,210],[208,280],[212,340],[228,420],[232,500]],[[195,300],[188,340],[176,420],[168,500]]];
+const sh=(p,dx)=>p.map(q=>[q[0]+dx,q[1]]);
+const ART=PATHS,VEN=PATHS.map(p=>sh(p,9).reverse());
+function plen(p){let L=0;for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return L}
+function at(p,t){let L=plen(p)*t,i=1;for(;i<p.length;i++){const d=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);if(L<=d)return[p[i-1][0]+(p[i][0]-p[i-1][0])*L/d,p[i-1][1]+(p[i][1]-p[i-1][1])*L/d];L-=d}return p[p.length-1]}
+const P=[];for(let k=0;k<5;k++)for(let j=0;j<14;j++){P.push({p:ART[k],t:j/14,a:1});P.push({p:VEN[k],t:j/14,a:0})}
+function line(p,col,w,blur){b.beginPath();p.forEach((q,i)=>i?b.lineTo(q[0],q[1]):b.moveTo(q[0],q[1]));b.strokeStyle=col;b.lineWidth=w;b.shadowColor=col;b.shadowBlur=blur;b.lineJoin=b.lineCap='round';b.stroke();b.shadowBlur=0}
+function heart(cx,cy,s,col){b.save();b.translate(cx,cy);b.scale(s,s);b.beginPath();b.moveTo(0,22);b.bezierCurveTo(-45,-5,-30,-42,0,-18);b.bezierCurveTo(30,-42,45,-5,0,22);b.fillStyle=col;b.shadowColor=col;b.shadowBlur=30*s;b.fill();b.restore();b.shadowBlur=0}
+const ZM={body:1,lungs:1.6,heart:2.1,hand:1};
+function nerves(now){b.save();b.lineCap='round';b.setLineDash([6,5]);b.lineDashOffset=-now/40;b.strokeStyle='#ffd23f';b.lineWidth=2;b.shadowColor='#ffd23f';b.shadowBlur=8;
+[[[193,64],[190,110],[186,160],[190,205],[196,250]],[[207,64],[210,110],[214,160],[210,205],[204,250]],[[190,140],[160,150],[135,175]],[[210,140],[240,150],[265,175]],[[190,185],[196,192]],[[210,185],[204,192]]].forEach(p=>{b.beginPath();p.forEach((q,i)=>i?b.lineTo(q[0],q[1]):b.moveTo(q[0],q[1]));b.stroke()});b.restore()}
+function lungs(a){const br=Math.sin(bph*6.283),T=performance.now()/1600%1;b.save();b.translate(200,185);b.scale(.72*(1+.03*br),.72*(1+.06*br));b.translate(-200,-190);b.globalAlpha=a;
+[-1,1].forEach(s=>{const g=b.createLinearGradient(200+s*20,110,200+s*100,270);g.addColorStop(0,'#ff9fb0');g.addColorStop(1,'#a8324f');
+b.beginPath();b.moveTo(200+s*16,118);b.bezierCurveTo(200+s*105,100,200+s*112,236,200+s*74,268);b.bezierCurveTo(200+s*46,282,200+s*18,262,200+s*16,232);b.closePath();b.fillStyle=g;b.fill();b.strokeStyle='#ffd0d9aa';b.lineWidth=1.5;b.stroke();
+b.beginPath();b.moveTo(200+s*30,160);b.quadraticCurveTo(200+s*80,185,200+s*92,215);b.strokeStyle='#7a1f3a88';b.stroke();
+const L=[[200,150,200+s*30,170],[200+s*30,170,200+s*60,200],[200+s*30,170,200+s*50,160],[200+s*60,200,200+s*80,230],[200+s*60,200,200+s*48,240],[200+s*50,160,200+s*85,150]];
+L.forEach(l=>{b.beginPath();b.moveTo(l[0],l[1]);b.lineTo(l[2],l[3]);b.strokeStyle='#ffe3e8';b.lineWidth=2.5;b.stroke()});
+const u=(br+1)/2;L.forEach(l=>{b.fillStyle='#9be8ff';b.beginPath();b.arc(l[0]+(l[2]-l[0])*u,l[1]+(l[3]-l[1])*u,2,0,7);b.fill()});
+[[85,150],[80,230],[48,240],[60,200]].forEach(e=>{b.strokeStyle='#ffd0d9';b.lineWidth=1;[[0,0],[5,3],[-5,3],[0,-5]].forEach(d=>{b.beginPath();b.arc(200+s*e[0]+d[0],e[1]+d[1],3.5,0,7);b.stroke()})});
+const A=[200+s*8,205,200+s*62,196],B=[200+s*66,214,200+s*14,214];
+b.lineWidth=2;b.strokeStyle='#4aa0ff88';b.beginPath();b.moveTo(A[0],A[1]);b.lineTo(A[2],A[3]);b.stroke();b.strokeStyle='#ff6a7a88';b.beginPath();b.moveTo(B[0],B[1]);b.lineTo(B[2],B[3]);b.stroke();
+b.fillStyle='#4aa0ff';b.beginPath();b.arc(A[0]+(A[2]-A[0])*T,A[1]+(A[3]-A[1])*T,3,0,7);b.fill();b.fillStyle='#ff6a7a';b.beginPath();b.arc(B[0]+(B[2]-B[0])*T,B[1]+(B[3]-B[1])*T,3,0,7);b.fill()});
+b.strokeStyle='#ffe3e8';b.lineWidth=6;b.beginPath();b.moveTo(200,66);b.lineTo(200,150);b.stroke();
+b.strokeStyle='#c98a96';b.lineWidth=1;for(let y=72;y<150;y+=7){b.beginPath();b.moveTo(195,y);b.lineTo(205,y);b.stroke()}
+b.restore()}
+function heartDetail(s){const T=performance.now()/1200%1;b.save();b.translate(200,192);b.scale(.85*s,.85*s);
+const g=b.createRadialGradient(-10,-12,2,0,0,40);g.addColorStop(0,'#ffffff55');g.addColorStop(.5,'#ffffff00');g.addColorStop(1,'#00000077');
+b.beginPath();b.moveTo(0,22);b.bezierCurveTo(-45,-5,-30,-42,0,-18);b.bezierCurveTo(30,-42,45,-5,0,22);b.fillStyle=g;b.fill();
+b.lineCap='round';b.strokeStyle='#ffffff55';b.lineWidth=1.2;b.beginPath();b.moveTo(0,-16);b.lineTo(0,20);b.moveTo(-26,-4);b.lineTo(-4,-1);b.moveTo(4,-1);b.lineTo(26,-4);b.stroke();
+b.lineWidth=6;b.strokeStyle='#ff4256';b.beginPath();b.moveTo(8,-20);b.quadraticCurveTo(10,-46,-12,-40);b.stroke();
+b.strokeStyle='#4aa0ff';b.beginPath();b.moveTo(-6,-18);b.lineTo(-6,-40);b.moveTo(-22,-14);b.lineTo(-24,-38);b.stroke();
+b.lineWidth=1.5;b.strokeStyle='#ff6a7a';b.beginPath();b.moveTo(10,-12);b.quadraticCurveTo(30,0,22,16);b.moveTo(-10,-12);b.quadraticCurveTo(-30,-2,-20,14);b.stroke();
+b.strokeStyle='#3b8cff';b.beginPath();b.moveTo(-3,-10);b.quadraticCurveTo(-14,4,-6,18);b.stroke();
+b.fillStyle='#fff';b.font='7px Trebuchet MS';b.textAlign='center';b.fillText('RA',-16,-8);b.fillText('RV',-12,10);b.fillText('LA',16,-8);b.fillText('LV',12,10);
+const R=[[-16,-8],[-12,8],[-6,-30]],Lf=[[16,-8],[12,8],[8,-34]];
+[[R,'#4aa0ff'],[Lf,'#ff6a7a']].forEach(([P,c])=>{const t=T*2%1,k=t<.33?0:t<.66?1:2,u=(t*3)%1,A=P[k],B=P[Math.min(k+1,2)];b.fillStyle=c;b.beginPath();b.arc(A[0]+(B[0]-A[0])*u,A[1]+(B[1]-A[1])*u,2,0,7);b.fill()});
+b.restore()}
+function hand(now,hr,ph){b.fillStyle='#050a14f2';b.fillRect(0,0,400,560);
+const F=[[160,300,150,175],[188,290,190,150],[214,290,222,158],[240,305,252,185],[132,350,88,292]];
+const S=(w,c,fl)=>{b.strokeStyle=c;b.lineCap='round';F.forEach(f=>{b.beginPath();b.moveTo(f[0],f[1]);b.lineTo(f[2],f[3]);b.lineWidth=w;b.stroke()});b.beginPath();b.moveTo(200,330);b.lineTo(196,520);b.lineWidth=w*2;b.stroke();b.fillStyle=fl;b.beginPath();b.arc(196,345,50,0,7);b.fill()};
+S(36,'#38d9ff66','#38d9ff33');S(30,'#0b1a33','#0b1a33');S(4,'#bcd6ff','#0000');
+const A=[[205,520],[203,440],[198,380],[210,335]];line(A,'#ff425688',3,8);const q=at(A,ph);b.fillStyle='#ff6a7a';b.beginPath();b.arc(q[0],q[1],4,0,7);b.fill();
+b.beginPath();b.arc(203,440,8+26*ph,0,7);b.strokeStyle=`rgba(255,66,86,${.7*(1-ph)})`;b.lineWidth=2;b.stroke();
+b.fillStyle='#d6e6ff';b.font='bold 13px Courier New';b.textAlign='center';b.fillText('RADIAL PULSE '+Math.round(hr)+' BPM',200,24)}
+function oinfo(){guide();const f=id=>{const x=V.find(y=>y.id==id);return x.v.toFixed(x.d)};
+$('organinfo').innerHTML={body:`<b>Whole body.</b> Heart ${f('hr')} bpm, BP ${f('sys')}/${f('dia')}, SpO₂ ${f('spo2')}%. Use the buttons on the left to zoom into an organ.`,
+lungs:`<b>Lungs.</b> Breathing ${f('rr')}/min · SpO₂ ${f('spo2')}% · cabin CO₂ ${f('co2')} mmHg. Zero-G: air and blood spread evenly through the lungs. High CO₂ is the main risk because exhaled air stays around the face.`,
+heart:`<b>Heart.</b> ${f('hr')} bpm · BP ${f('sys')}/${f('dia')} mmHg. Zero-G: blood volume falls about 10% and the heart gets smaller and rounder on long missions.`,
+hand:`<b>Hand and radial pulse.</b> Pulse ${f('hr')} bpm · temp ${f('temp')} °C. Zero-G: skin gets thinner and heals slower, and fingertips crack more easily.`}[organ]}
+$('organs').onclick=e=>{const o=e.target.dataset.o;if(o){organ=o;[...$('organs').children].forEach(c=>c.className=c.dataset.o==o?'on':'')}};
+$('organs').children[0].className='on';
+function setCrew(i){ci=i;ST=CREW[i].st;V.forEach(x=>{x.b=x.b0+(CREW[i].p[x.id]||0);x.v=x.b;x.off=0;x.st=0});active=null;faultT=0;for(const k in H)H[k]=[];
+document.querySelector('h1 small').textContent=`${CREW[i].n} · ${CREW[i].role} · Orbital station · Live telemetry (simulated)`;
+[...$('crew').children].forEach(c=>c.className=c.dataset.i==i?'on':'');log(`Monitoring switched to ${CREW[i].n}`,0)}
+$('crew').innerHTML='<span style="color:var(--dim);font-size:12px;align-self:center">Crew:</span>'+CREW.map((c,i)=>`<button data-i="${i}">${c.n} · ${c.role}</button>`).join('');
+$('crew').onclick=e=>{if(e.target.dataset.i!=null)setCrew(+e.target.dataset.i)};$('crew').children[1].className='on';
+document.querySelector('h1 small').textContent=`${CREW[0].n} · ${CREW[0].role} · Orbital station · Live telemetry (simulated)`;
+let phase=0,lastT=performance.now(),scanY=0,E=new Array(250).fill(0),ec=$('ecg').getContext('2d');
+const g=(x,m,s,a)=>a*Math.exp(-(((x-m)/s)**2)/2);
+const wave=p=>g(p,.12,.03,.18)+g(p,.27,.012,-.15)+g(p,.3,.012,1)+g(p,.33,.014,-.25)+g(p,.55,.05,.3);
+function frame(now){
+ const dt=Math.min(.05,(now-lastT)/1000);lastT=now;
+ const hr=V[0].v,st=V[0].st,spo=V[1].v;
+ bph+=dt*V[5].v/60;phase+=dt*hr/60;if(phase>=1)phase-=1;
+ const sc2=1+.17*Math.exp(-phase*9),col=st==2?'#ff1f3a':'#ff3b5e';
+ stars();
+ b.clearRect(0,0,400,560);
+ const bob=Math.sin(now/1300)*5;b.save();b.translate(Math.sin(now/2100)*4,bob);{const Z=ZM[organ];b.translate(200,192);b.scale(Z,Z);b.translate(-200,-192)}
+ // zero-g floating body glow
+ b.fillStyle='#38d9ff10';b.beginPath();b.arc(200,52,32,0,7);b.fill();
+ b.strokeStyle='#38d9ff55';b.lineWidth=1.5;b.stroke();
+ ART.forEach(p=>{line(p,'#38d9ff12',34,0)});
+ ART.forEach(p=>line(p,'#ff425655',3,8));VEN.forEach(p=>line(p,'#3b8cff66',3,8));
+ const spd=hr/72*.22*(1+.8*Math.exp(-phase*6));
+ P.forEach(q=>{q.t+=dt*spd;if(q.t>1)q.t-=1;const [x,y]=at(q.p,q.t);const c=q.a?(spo<94?'#d65a8a':'#ff6a7a'):'#4aa0ff';b.fillStyle=c;b.shadowColor=c;b.shadowBlur=10;b.beginPath();b.arc(x,y,q.a?2.6:2.2,0,7);b.fill()});b.shadowBlur=0;
+ // halo pulse
+ b.beginPath();b.arc(200,192,38+60*phase,0,7);b.strokeStyle=`rgba(255,66,86,${.5*(1-phase)})`;b.lineWidth=2;b.stroke();
+ nerves(now);if(organ!='heart')lungs(organ=='lungs'?.95:.55);heart(200,192,.85*sc2,col);heartDetail(sc2);
+ b.fillStyle='#ffd0d6';b.font='bold 13px Courier New';b.textAlign='center';b.fillText(Math.round(hr)+' BPM',200,198);
+ b.restore();
+ if(organ=='hand')hand(now,hr,phase);
+ // scan line
+ scanY=(scanY+90*dt)%560;const gr=b.createLinearGradient(0,scanY-40,0,scanY);gr.addColorStop(0,'#38d9ff00');gr.addColorStop(1,'#38d9ff55');b.fillStyle=gr;b.fillRect(0,scanY-40,400,40);
+ b.fillStyle='#7f96b8';b.font='11px Courier New';b.textAlign='left';b.fillText('● ARTERIES  ● VEINS  ● NERVES',10,548);
+ // ECG
+ for(let i=0;i<2;i++)E.push(wave(phase)+(Math.random()-.5)*.04+(st==2?(Math.random()-.5)*.25:0)),E.shift();
+ ec.clearRect(0,0,500,150);ec.strokeStyle='#1b305088';ec.lineWidth=1;for(let x=0;x<500;x+=25){ec.beginPath();ec.moveTo(x,0);ec.lineTo(x,150);ec.stroke()}
+ ec.beginPath();E.forEach((v,i)=>ec.lineTo(i*2,115-v*85));ec.strokeStyle=st==2?'#ff3b4e':'#33f0a0';ec.shadowColor=ec.strokeStyle;ec.shadowBlur=10;ec.lineWidth=2;ec.stroke();ec.shadowBlur=0;
+ requestAnimationFrame(frame)
+}
+requestAnimationFrame(frame);
+// ---------- info panels ----------
+const hm=t=>String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
+const SCH=[
+[360,'sl','Wake-up','Weigh-in, medical check, drink 500 ml water. Do not skip.'],
+[390,'eat','Breakfast','Eat. ~700–800 kcal, protein + carbs. Strong flavours taste better because fluid shift dulls taste and smell.'],
+[510,'ex','Exercise 1','Treadmill with harness or resistive device (ARED), ~60–75 min. Last meal at least 90 min before.'],
+[660,'eat','Rehydrate + snack','Water or electrolyte drink and a light snack after exercise.'],
+[750,'eat','Lunch','Eat. ~800–900 kcal, with calcium and vitamin D foods.'],
+[840,'no','Work block: caffeine cut-off at 15:00','Avoid new caffeine after this block to protect sleep.'],
+[960,'ex','Exercise 2','Cycle ergometer (cardio), ~45–60 min.'],
+[1050,'eat','Light snack','Fruit or nuts. Keep it small.'],
+[1110,'eat','Dinner','Eat. ~800–900 kcal. Finish by 19:30.'],
+[1200,'no','No heavy food from now','Heavy meals within 2 h of sleep cause reflux, because there is no gravity to keep food down.'],
+[1290,'sl','Wind-down','Dim lights, sip water only, log symptoms.'],
+[1320,'sl','Sleep (8 h)','Strap into the sleeping bag. Do not eat in the sleep period.']];
+const TABS={
+food:()=>`<div class="banner" id="mealst"></div><div class="tl">${SCH.map((e,i)=>`<div class="ev ${e[1]}" data-i="${i}"><time>${hm(e[0])}</time><div><b>${e[2]}</b><br><span style="color:var(--dim)">${e[3]}</span></div></div>`).join('')}</div>
+<h2 style="margin-top:14px">Food rules in zero gravity</h2><ul><li>Roughly 2,500–3,000 kcal a day, in three main meals about 6 h apart, plus light snacks.</li><li>Drink about 2–3 L of fluid a day. Thirst signals weaken in space.</li><li><b>Do not eat:</b> crumbly food (bread, chips) because crumbs float into eyes and equipment; fizzy drinks (gas does not separate from liquid, so it bloats you); heavy meals right before exercise or sleep.</li><li>Keep sodium moderate. High salt speeds up calcium and bone loss.</li><li>Eat calcium, vitamin D, protein, omega-3 and antioxidant foods. Vitamin D is usually supplemented because there is no sunlight on the skin.</li><li>Eat slowly. Food is held in sticky or packaged form so it does not float away.</li></ul>`,
+zero:()=>`<table><tr><th>What happens</th><th>Details</th></tr>
+<tr><td>Fluid shift</td><td>About 1.5–2 L of body fluid moves from the legs to the chest and head within hours. Result: puffy face, thin legs ("chicken legs"), stuffy nose, headache.</td></tr>
+<tr><td>Space adaptation sickness</td><td>Affects around half of astronauts for the first 2–3 days. The inner ear (vestibular system) loses its gravity reference. Nausea, vomiting, dizziness.</td></tr>
+<tr><td>Bone loss</td><td>About 1–1.5% bone density lost per month in weight-bearing bones (hips, spine, legs). Calcium in blood and urine rises, kidney-stone risk goes up.</td></tr>
+<tr><td>Muscle loss</td><td>Postural (anti-gravity) muscles weaken fast. Without exercise, large losses happen in days to weeks. Exercise ~2 h a day slows this.</td></tr>
+<tr><td>Heart</td><td>Less work against gravity, so the heart gets smaller and more spherical over long missions. Blood volume falls about 10%. On return, standing up can cause fainting (orthostatic intolerance).</td></tr>
+<tr><td>Eyes</td><td>Head-ward fluid and raised pressure can flatten the back of the eye and swell the optic disc. Called SANS. It can blur vision on long missions.</td></tr>
+<tr><td>Spine and height</td><td>The spine decompresses and astronauts grow about 2–5 cm taller. Back pain is common in the first weeks.</td></tr>
+<tr><td>Blood</td><td>Red blood cell production drops ("space anemia") because of the fluid shift.</td></tr>
+<tr><td>Immune system</td><td>Stress, radiation and disrupted sleep weaken some immune responses. Dormant viruses can reactivate.</td></tr>
+<tr><td>Sleep</td><td>The station sees about 16 sunrises a day. Light schedules, noise and a fixed work routine are used to protect sleep.</td></tr>
+<tr><td>Radiation</td><td>About 0.5 mSv per day on a low-orbit station, roughly 50–100 times ground level. This raises long-term cancer and cataract risk.</td></tr>
+<tr><td>Mind</td><td>Isolation, confinement and the distance from home affect mood. Regular contact with family and a clear schedule help.</td></tr></table>`,
+anat:()=>`<table><tr><th>System</th><th>On Earth</th><th>In zero gravity</th></tr>
+<tr><td>Heart and vessels</td><td>Pumps blood up against gravity. Valves keep leg blood from pooling.</td><td>Blood spreads evenly. Heart works less, shrinks, and neck veins can swell.</td></tr>
+<tr><td>Bones</td><td>Constant load makes bone rebuild itself.</td><td>No load. Bone breaks down faster than it builds.</td></tr>
+<tr><td>Muscles</td><td>Legs and back hold you upright.</td><td>Not needed for posture, so they waste. Fast-twitch fibres are hit hardest.</td></tr>
+<tr><td>Lungs</td><td>Lower lungs get more blood and air.</td><td>Blood and air spread evenly, which makes gas exchange more uniform. Breathing is easier at rest.</td></tr>
+<tr><td>Brain and inner ear</td><td>Otolith organs sense "down".</td><td>Signals disagree with vision. The brain re-learns within days.</td></tr>
+<tr><td>Gut</td><td>Food moves with help from gravity.</td><td>Muscle waves still move food (peristalsis), but reflux and bloating are more common.</td></tr>
+<tr><td>Kidneys</td><td>Filter normal calcium load.</td><td>More calcium to filter, so stones are more likely. Hydration is key.</td></tr>
+<tr><td>Skin</td><td>Sheds and heals normally.</td><td>Thinner, more sensitive, slower healing. Calluses form on the tops of feet from restraint loops.</td></tr></table>`,
+meas:()=>`<ul><li><b>Exercise:</b> about 2 h a day, 6 days a week. Treadmill (T2), ARED resistance device and cycle ergometer.</li><li><b>Lower-body negative pressure and compression garments</b> pull fluid back toward the legs.</li><li><b>Nutrition:</b> calcium, vitamin D, protein and enough calories. Under-eating speeds muscle and bone loss.</li><li><b>Medicine:</b> bisphosphonates in some studies for bone, anti-nausea drugs for the first days.</li><li><b>Monitoring:</b> daily vitals, regular ultrasound of heart and eyes, blood and urine tests, dosimeters for radiation.</li><li><b>Shielding:</b> shelter in the most shielded module during solar flares.</li><li><b>Re-entry:</b> fluid-loading and compression suits to prevent fainting.</li></ul><p style="color:var(--dim)">Educational simulation. Values shown are simulated and are not medical advice.</p>`};
+const TN={food:'Food and timing',zero:'Body in zero-G',anat:'Anatomy map',meas:'Countermeasures'};
+const ACT={hr:'Check ECG, stop exertion, notify flight surgeon.',spo2:'Check mask and cabin O₂, re-measure, prepare oxygen therapy.',sys:'Check hydration, rest restrained, re-measure in 5 min.',dia:'Re-measure and check fluid status.',temp:'Give fluids, look for infection, cool the cabin.',rr:'Check CO₂ and airflow, coach slow breathing.',hyd:'Drink 500 ml electrolyte fluid now.',co2:'Switch to backup scrubber, move to a clean module.',rad:'Shelter in the shielded module and log the dose.',bone:'Raise ARED load, review calcium and vitamin D.'};
+const readiness=()=>Math.max(0,100-V.reduce((a,x)=>a+x.st*(x.st==2?18:7),0)-(ST.ex<60?5:0)-(ST.water<1500?5:0));
+const PROT=`<h2 style="margin-top:14px">Emergency protocols (microgravity)</h2><table><tr><th>Event</th><th>First actions</th></tr>
+<tr><td>Cardiac arrest</td><td>Strap the patient to the medical restraint system, start chest compressions (two-hand or the Evetts-Russomano method), use the AED, call ground.</td></tr>
+<tr><td>Rapid decompression</td><td>Close hatches, put on masks, find the leak, watch cabin pressure.</td></tr>
+<tr><td>Fire or smoke</td><td>Put on masks, power down the module, use the CO₂ extinguisher.</td></tr>
+<tr><td>Toxic atmosphere</td><td>Put on masks, move to the clean segment, seal the hatch.</td></tr>
+<tr><td>Solar particle event</td><td>Shelter in the most shielded module until dose rate falls.</td></tr>
+<tr><td>Serious injury or illness</td><td>Treat on board with the medical kit and ground specialists. Evacuation back to Earth takes hours at best.</td></tr></table>`;
+TN.surg='Flight surgeon';TN.trend='Trends';TN.track='Daily log and tests';
+TABS.surg=()=>{const al=V.filter(x=>x.st),w=Math.max(0,...V.map(x=>x.st));return `<div class="banner ${CLS[w]}">${CREW[ci].n} · Crew Readiness Index ${readiness()}/100</div>`+(al.length?`<table><tr><th>Alert</th><th>Value</th><th>Recommended action</th></tr>${al.map(x=>`<tr><td>${x.n} (${NAMES[x.st]})</td><td>${x.v.toFixed(x.d)} ${x.u}</td><td>${ACT[x.id]}</td></tr>`).join('')}</table>`:'<p>No active alerts. Keep to the exercise, water and sleep plan.</p>')+PROT};
+function drawTr(){const c=$('tr');if(!c)return;const t=c.getContext('2d');t.clearRect(0,0,900,420);V.forEach((x,i)=>{const X=i%5*180,Y=Math.floor(i/5)*210,a=H[x.id]||[];t.strokeStyle='#1b3050';t.strokeRect(X+4,Y+4,172,202);t.fillStyle='#7f96b8';t.font='12px Trebuchet MS';t.fillText(x.n,X+12,Y+24);
+const col=['#33f0a0','#ffc233','#ff3b4e'][x.st];t.fillStyle=col;t.font='bold 20px Courier New';t.fillText(x.v.toFixed(x.d)+' '+x.u,X+12,Y+50);
+if(a.length>1){const mn=Math.min(...a),mx=Math.max(...a),r=(mx-mn)||1;t.beginPath();a.forEach((v,k)=>t[k?'lineTo':'moveTo'](X+12+k*160/119,Y+190-(v-mn)/r*110));t.strokeStyle=col;t.lineWidth=2;t.stroke()}})}
+TABS.trend=()=>{setTimeout(drawTr,0);return '<canvas class="view" id="tr" width="900" height="420"></canvas><p style="color:var(--dim)">Last 60 seconds of live data for '+CREW[ci].n+'. Line colour follows the alert level.</p>'};
+TABS.track=()=>`<div class="cards"><div class="card"><b>Water today</b><span class="v" id="t_w"></span> <u>/ 2500 ml</u></div><div class="card"><b>Exercise today</b><span class="v" id="t_e"></span> <u>/ 120 min</u></div><div class="card"><b>Radiation dose</b><span class="v" id="t_d"></span> <u>mSv of 600 career</u></div><div class="card"><b>Readiness</b><span class="v" id="t_r"></span> <u>/ 100</u></div></div>
+<div class="ctl"><button data-a="w">+250 ml water</button><button data-a="e">ARED +30 min</button><button data-a="e">Treadmill +30 min</button><button data-a="e">Cycle +30 min</button></div>
+<h2 style="margin-top:12px">Mood and sleep check-in</h2><div class="ctl"><label>Mood <input type="range" min="1" max="10" value="${ST.mood}" id="mood"> <span id="mv">${ST.mood}</span></label><label>Sleep h <input type="range" min="0" max="10" step=".5" value="${ST.sleep}" id="slp"> <span id="sv">${ST.sleep}</span></label></div>
+<h2 style="margin-top:12px">Reaction test (psychomotor vigilance)</h2><div class="ctl"><button id="pvt" style="min-width:220px">Start test</button><span id="pvr" style="color:var(--dim)"></span></div>
+<div class="ctl"><button data-a="x">Export crew report (JSON)</button></div>`;
+function updT(){const g=id=>$(id),w=g('t_w');if(!w)return;w.textContent=ST.water;g('t_e').textContent=ST.ex;g('t_d').textContent=ST.dose.toFixed(3);g('t_r').textContent=readiness()}
+let pS=0,pT=0,pH=0;
+$('tabbody').onclick=e=>{const a=e.target.dataset.a;
+ if(a=='w'){ST.water+=250;log(`${CREW[ci].n}: +250 ml water logged`,0)}
+ if(a=='e'){ST.ex+=30;log(`${CREW[ci].n}: +30 min exercise logged`,0)}
+ if(a=='x'){const bl=new Blob([JSON.stringify({crew:CREW[ci].n,role:CREW[ci].role,met:met(),vitals:Object.fromEntries(V.map(x=>[x.id,+x.v.toFixed(2)])),log:ST,readiness:readiness()},null,1)],{type:'application/json'}),l=document.createElement('a');l.href=URL.createObjectURL(bl);l.download=CREW[ci].n.replace(/\W+/g,'_')+'_report.json';l.click()}
+ if(e.target.id=='pvt'){const p=e.target;
+  if(pS==0){pS=1;p.textContent='Wait for green...';pH=setTimeout(()=>{pS=2;pT=performance.now();p.textContent='CLICK NOW';p.style.background='#0a7a4a'},1000+Math.random()*2000)}
+  else if(pS==1){clearTimeout(pH);pS=0;p.textContent='Too early. Start again';}
+  else{const rt=Math.round(performance.now()-pT);pS=0;p.style.background='';p.textContent='Start test';ST.pvt.push(rt);const av=Math.round(ST.pvt.reduce((a,c)=>a+c,0)/ST.pvt.length);$('pvr').textContent=`Last ${rt} ms · average ${av} ms (${ST.pvt.length} tests)`;if(rt>500)log(`${CREW[ci].n}: slow reaction ${rt} ms, possible fatigue`,1)}}
+ updT()};
+$('tabbody').oninput=e=>{if(e.target.id=='mood'){ST.mood=+e.target.value;$('mv').textContent=ST.mood}if(e.target.id=='slp'){ST.sleep=+e.target.value;$('sv').textContent=ST.sleep}};
+TN.med='Food and medicine';TN.haz='Mission risks and Mars';
+TABS.med=()=>{const ac=new Set(V.filter(x=>x.st&&VM[x.id]).map(x=>VM[x.id]));return `<div class="banner ${ac.size?'s1':'s0'}">${ac.size?'Active now: '+[...ac].map(k=>COND[k].n).join(', '):'No active alerts. The table shows what to eat and take for each problem.'}</div><table><tr><th>Problem</th><th>Eat and drink</th><th>Medicine (doctor decides)</th><th>Avoid</th></tr>${Object.keys(COND).map(k=>{const c=COND[k];return `<tr style="${ac.has(k)?'background:#ff3b4e22':''}"><td><b>${c.n}</b></td><td>${c.eat}</td><td>${c.med}</td><td>${c.no}</td></tr>`}).join('')}</table><p style="color:var(--dim)">The station medical kit has fever and pain relievers, anti-nausea, sleep, allergy, antibiotic and eye medicines. Only the flight surgeon picks the medicine and dose. Educational simulation, not medical advice.</p>`};
+TABS.haz=()=>{const c=Math.min(1,ST.ex/120),rt=1.2-.8*c;return `<table><tr><th>NASA hazard of spaceflight</th><th>What this monitor does</th></tr>
+<tr><td>Radiation</td><td>Live dose rate, career dose bar, solar-flare fault and shelter steps.</td></tr>
+<tr><td>Isolation and confinement</td><td>Mood and sleep check-ins, reaction test.</td></tr>
+<tr><td>Distance from Earth</td><td>Mars delay simulator below, on-board emergency protocols.</td></tr>
+<tr><td>Gravity changes</td><td>Heart, lung and hand models, exercise tracking, bone forecast.</td></tr>
+<tr><td>Hostile, closed environment</td><td>CO₂, hydration and temperature alerts with actions.</td></tr></table>
+<h2 style="margin-top:14px">Bone forecast for ${CREW[ci].n}</h2><table><tr><th>Mission month</th><th>Bone density (% of baseline)</th></tr>${[1,3,6,12].map(m=>`<tr><td>${m}</td><td>${(V[9].v-rt*m).toFixed(1)}</td></tr>`).join('')}</table><p style="color:var(--dim)">Loss rate ${rt.toFixed(2)}% a month (1.2% with no exercise, 0.4% with the full 120 min a day). Illustrative model. Log exercise in the Daily log tab.</p>
+<h2 style="margin-top:14px">Mars communication delay</h2><div class="ctl"><label>One-way delay <input type="range" min="3" max="22" value="12" id="dl"> <span id="dv">12</span> min</label><button data-a="msg">Send emergency question to Earth</button></div><div id="mr" class="banner s1" style="margin-top:8px">No message sent. (1 delay minute = 1 real second here.)</div>`};
+let msgT=0;
+function updM(){const m=$('mr');if(!m||!msgT)return;const r=Math.ceil((msgT-Date.now())/1000);if(r>0){m.className='banner s2';m.textContent=`Waiting for Earth... reply in ${r} s. The crew must act alone first.`}else{m.className='banner s0';m.textContent='Reply received: follow the Flight surgeon tab steps and report the result.';msgT=0}}
+$('tabbody').addEventListener('click',e=>{if(e.target.dataset.a=='msg'){msgT=Date.now()+2*+$('dl').value*1000;log(`${CREW[ci].n}: question sent to Earth, round trip ${2*$('dl').value} min`,1);updM()}});
+$('tabbody').addEventListener('input',e=>{if(e.target.id=='dl')$('dv').textContent=e.target.value});
+let cur='food';
+$('tabs').innerHTML=Object.keys(TN).map(k=>`<button data-t="${k}">${TN[k]}</button>`).join('');
+function show(k){cur=k;$('tabbody').innerHTML=TABS[k]();[...$('tabs').children].forEach(b=>b.className=b.dataset.t==k?'on':'')}
+$('tabs').onclick=e=>{if(e.target.dataset.t)show(e.target.dataset.t)};
+function renderLive(){
+ if(cur!='food')return;
+ const m=Math.floor(simSec/60)%1440;let idx=0;SCH.forEach((e,i)=>{if(m>=e[0])idx=i});if(m<SCH[0][0])idx=SCH.length-1;
+ document.querySelectorAll('.ev').forEach(el=>el.classList.toggle('now',+el.dataset.i==idx));
+ const k=SCH[idx][1],bn=$('mealst');if(!bn)return;
+ const msg={eat:['s0','EAT NOW: '+SCH[idx][2]],ex:['s1','EXERCISE TIME: no food now'],no:['s2','DO NOT EAT HEAVY FOOD NOW'],sl:['s1','REST PERIOD: no food']}[k];
+ bn.className='banner '+msg[0];bn.textContent=`Crew time ${hm(m)} · ${msg[1]}`}
+show('food');requestAnimationFrame(clockLoop);
+setInterval(()=>{if(cur=='surg')$('tabbody').innerHTML=TABS.surg();if(cur=='trend')drawTr();if(cur=='track')updT();if(cur=='med')$('tabbody').innerHTML=TABS.med();if(cur=='haz')updM()},1000);
+</script></body></html>
